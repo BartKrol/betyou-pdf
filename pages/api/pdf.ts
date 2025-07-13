@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import { format } from 'date-fns';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,16 +19,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Launch Puppeteer browser
     browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
-      ]
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
