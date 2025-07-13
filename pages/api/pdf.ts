@@ -22,9 +22,19 @@ export default async function handler(
   let browser = null;
 
   try {
-    // Launch Puppeteer browser
+    // Launch Puppeteer browser with improved configuration
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [
+        ...chromium.args,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--single-process",
+        "--disable-gpu",
+      ],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -54,7 +64,6 @@ export default async function handler(
       );
     }
 
-    // Generate PDF
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
@@ -64,6 +73,8 @@ export default async function handler(
         bottom: "1cm",
         left: "1cm",
       },
+      preferCSSPageSize: false,
+      displayHeaderFooter: false,
     });
 
     await browser.close();
@@ -76,7 +87,8 @@ export default async function handler(
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.setHeader("Content-Length", pdf.length);
+    res.setHeader("Content-Length", pdf.length.toString());
+    res.setHeader("Cache-Control", "no-cache");
 
     return res.send(pdf);
   } catch (error) {
