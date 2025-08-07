@@ -171,12 +171,14 @@ export default async function handler(
       "yyyy-MM-dd"
     )}-account-statement.pdf`;
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.setHeader("Content-Length", pdf.length.toString());
-    res.setHeader("Cache-Control", "no-cache");
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": pdf.length.toString(),
+      "Cache-Control": "no-cache",
+    });
 
-    return res.send(pdf);
+    return res.end(pdf);
   } catch (error) {
     console.error("PDF generation error:", error);
 
