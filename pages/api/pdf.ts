@@ -1,6 +1,4 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
 import { format } from "date-fns";
 
 export default async function handler(
@@ -22,6 +20,11 @@ export default async function handler(
   let browser = null;
 
   try {
+    console.log(
+      "Starting PDF generation for token:",
+      token.substring(0, 10) + "..."
+    );
+
     // Launch Puppeteer browser with improved configuration
     browser = await puppeteer.launch({
       args: [
@@ -34,6 +37,8 @@ export default async function handler(
         "--no-zygote",
         "--single-process",
         "--disable-gpu",
+        "--disable-web-security",
+        "--allow-running-insecure-content",
       ],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
@@ -41,6 +46,21 @@ export default async function handler(
     });
 
     const page = await browser.newPage();
+
+    // Set up console logging from the page
+    page.on("console", (msg) => {
+      console.log("PAGE LOG:", msg.text());
+    });
+
+    // Set up error logging from the page
+    page.on("pageerror", (err) => {
+      console.log("PAGE ERROR:", err.message);
+    });
+
+    // Set up request failure logging
+    page.on("requestfailed", (req) => {
+      console.log("REQUEST FAILED:", req.url(), req.failure()?.errorText);
+    });
 
     // Set user agent
     await page.setUserAgent(
@@ -51,18 +71,60 @@ export default async function handler(
     const protocol = req.headers["x-forwarded-proto"] || "http";
     const host = req.headers.host;
     const baseUrl = `${protocol}://${host}`;
+    const targetUrl = `${baseUrl}?token=${token}`;
+
+    console.log("Navigating to:", targetUrl);
 
     // Navigate to the main page with the token
-    const response = await page.goto(`${baseUrl}?token=${token}`, {
+    const response = await page.goto(targetUrl, {
       waitUntil: "networkidle0",
-      timeout: 30000,
+      timeout: 45000,
     });
 
     if (!response || response.status() !== 200) {
       throw new Error(
-        `Failed to load page - ${response?.statusText() ?? "Unknown Error"}`
+        `Failed to load page - Status: ${response?.status()} ${
+          response?.statusText() ?? "Unknown Error"
+        }`
       );
     }
+
+    console.log("Page loaded successfully, status:", response.status());
+
+    // Wait for the content to be ready by checking if the main content is loaded
+    await page.waitForFunction(
+      () => {
+        const content = document.querySelector('div[class*="space-y-4"]');
+        const loading = document.querySelector('div[class*="spinner-border"]');
+        const error = document
+          .querySelector("div")
+          ?.textContent?.includes("error");
+
+        // Return true if content is loaded and not in loading or error state
+        return content && !loading && !error;
+      },
+      { timeout: 30000 }
+    );
+
+    // Additional check to ensure the page has actual content
+    const hasContent = await page.evaluate(() => {
+      const content = document.querySelector('div[class*="space-y-4"]');
+      const tables = document.querySelectorAll("table");
+      const text = document.body.textContent || "";
+
+      return (
+        content &&
+        (tables.length > 0 || text.includes("BetYou Account Statement"))
+      );
+    });
+
+    if (!hasContent) {
+      throw new Error(
+        "Page loaded but content is not available - GraphQL query might have failed"
+      );
+    }
+
+    console.log("Content verification passed, generating PDF...");
 
     const pdf = await page.pdf({
       format: "A4",
@@ -78,6 +140,8 @@ export default async function handler(
     });
 
     await browser.close();
+
+    console.log("PDF generated successfully, size:", pdf.length, "bytes");
 
     // Set response headers for PDF download
     const filename = `${format(
@@ -95,7 +159,11 @@ export default async function handler(
     console.error("PDF generation error:", error);
 
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error("Error closing browser:", closeError);
+      }
     }
 
     return res.status(500).json({

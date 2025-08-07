@@ -74,15 +74,28 @@ export default function Home() {
     if (!token) {
       return null;
     }
-    const auth = `Bearer ${token}`;
-    const data = await request<AccountStatementQuery>(
-      process.env.NEXT_PUBLIC_API_URL!,
-      Query,
-      {},
-      new Headers({ authorization: auth })
-    );
 
-    return data;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    console.log("API URL:", apiUrl);
+    console.log("Token:", token);
+
+    const auth = `Bearer ${token}`;
+    console.log("Making GraphQL request to:", apiUrl);
+
+    try {
+      const data = await request<AccountStatementQuery>(
+        apiUrl,
+        Query,
+        {},
+        new Headers({ authorization: auth })
+      );
+
+      console.log("GraphQL request successful:", data);
+      return data;
+    } catch (error) {
+      console.error("GraphQL request failed:", error);
+      throw error;
+    }
   }, [token]);
 
   if (!token) {
@@ -103,7 +116,22 @@ export default function Home() {
   }
 
   if (query.error) {
-    return <div>{query.error.message}</div>;
+    return (
+      <div className="p-4">
+        <div className="text-red-600 font-bold">
+          Error loading account statement:
+        </div>
+        <div className="text-red-500">{query.error.message}</div>
+        <div className="mt-2 text-sm text-gray-600">
+          <div>
+            API URL:{" "}
+            {process.env.NEXT_PUBLIC_API_URL ||
+              "http://localhost:4000 (fallback)"}
+          </div>
+          <div>Token: {token ? "Present" : "Missing"}</div>
+        </div>
+      </div>
+    );
   }
 
   if (!query.value) {
