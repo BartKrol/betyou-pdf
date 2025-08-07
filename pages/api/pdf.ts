@@ -25,10 +25,15 @@ export default async function handler(
       token.substring(0, 10) + "..."
     );
 
-    // Launch Puppeteer browser with improved configuration
-    browser = await puppeteer.launch({
+    // Use different launch configuration based on environment
+    // if (process.env.NODE_ENV === "production") {
+    // Production: use puppeteer-core with @sparticuz/chromium
+    const puppeteerCore = await import("puppeteer-core");
+    const chromium = await import("@sparticuz/chromium");
+
+    browser = await puppeteerCore.default.launch({
       args: [
-        ...chromium.args,
+        ...chromium.default.args,
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
@@ -40,10 +45,27 @@ export default async function handler(
         "--disable-web-security",
         "--allow-running-insecure-content",
       ],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      defaultViewport: chromium.default.defaultViewport,
+      executablePath: await chromium.default.executablePath(),
+      headless: chromium.default.headless,
     });
+    // } else {
+    //   // Development: use regular puppeteer with bundled Chromium
+    //   const puppeteer = await import("puppeteer");
+
+    //   browser = await puppeteer.default.launch({
+    //     args: [
+    //       "--no-sandbox",
+    //       "--disable-setuid-sandbox",
+    //       "--disable-dev-shm-usage",
+    //       "--disable-accelerated-2d-canvas",
+    //       "--no-first-run",
+    //       "--no-zygote",
+    //       "--disable-gpu",
+    //     ],
+    //     headless: true,
+    //   });
+    // }
 
     const page = await browser.newPage();
 
